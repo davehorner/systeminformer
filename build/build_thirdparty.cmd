@@ -26,7 +26,7 @@ if not defined VSINSTALLPATH (
 )
 
 if exist "%VSINSTALLPATH%\VC\Auxiliary\Build\vcvarsall.bat" (
-   call "%VSINSTALLPATH%\VC\Auxiliary\Build\vcvarsall.bat" amd64_arm64
+   call "%VSINSTALLPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
 ) else (
    goto end
 )
