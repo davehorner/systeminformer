@@ -35,6 +35,7 @@ extern BOOLEAN PhMainWndExiting;
 #define WM_PH_SHOW_EDITOR (WM_APP + 152)
 #define WM_PH_SHOW_RESULT (WM_APP + 153)
 #define WM_PH_LAST (WM_APP + 154)
+#define WM_PH_SEARCH_INITIAL (WM_APP + 900)
 
 // begin_phapppub
 typedef enum _PH_MAINWINDOW_CALLBACK_TYPE

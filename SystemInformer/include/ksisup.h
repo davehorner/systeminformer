@@ -13,6 +13,10 @@
 #ifndef PH_KSISUP_H
 #define PH_KSISUP_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 VOID
 PhShowKsiStatus(
     VOID
@@ -108,5 +112,9 @@ PhGetKsiNotConnectedString(
         Message
         );
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

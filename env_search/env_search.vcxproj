@@ -51,6 +51,7 @@
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <SpectreMitigation>Spectre</SpectreMitigation>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -71,6 +72,9 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -103,12 +107,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\w\systeminformer\phnt\include;C:\w\systeminformer\phlib\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\w\systeminformer\kphlib\include;C:\w\systeminformer\SystemInformer\include;C:\w\systeminformer\phnt\include;C:\w\systeminformer\phlib\include</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);C:\w\systeminformer\phlib\bin\Debug64\phlib.lib;C:\w\systeminformer\bin\Debug64\SystemInformer.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);C:\w\systeminformer\phlib\bin\Debug64\phlib.lib;C:\w\systeminformer\bin\Debug64\SystemInformer.lib;"C:\w\systeminformer\kphlib\bin\Debug64\kphlib_um.lib"</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -119,14 +124,32 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>C:\w\systeminformer\kphlib\include;C:\w\systeminformer\SystemInformer\include;C:\w\systeminformer\phnt\include;C:\w\systeminformer\phlib\include</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>"C:\w\systeminformer\bin\Release64\SystemInformer.lib";%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="env_search.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\kphlib\kphlib_um.vcxproj">
+      <Project>{f1757430-8eee-49df-a5f1-0999a53bb4a0}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\phlib\phlib.vcxproj">
+      <Project>{477d0215-f252-41a1-874b-f27e3ea1ed17}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\SystemInformer\SystemInformer.vcxproj">
+      <Project>{0271dd27-6707-4290-8dfe-285702b7115d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\tools\peview\peview.vcxproj">
+      <Project>{72c124a2-3c80-41c6-aba1-c4948b713204}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

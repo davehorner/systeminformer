@@ -39,6 +39,10 @@
 #include <srvprv.h>
 
 #include <mainwndp.h>
+ // External declarations for variables defined in main.c
+extern BOOLEAN PhInitialSearchRequested;
+extern DWORD PhInitialSearchPid;
+extern PPH_STRING PhInitialSearchText;
 
 HWND PhMainWndHandle = NULL;
 BOOLEAN PhMainWndExiting = FALSE;
@@ -161,6 +165,35 @@ LRESULT CALLBACK PhMwpWndProc(
 {
     switch (uMsg)
     {
+    case WM_PH_SEARCH_INITIAL:
+    {
+        if (PhInitialSearchText)
+        {
+            PhSetMainWindowSearchboxText(PhInitialSearchText);
+
+            PPH_PROCESS_NODE processNode = PhFindProcessNode((HANDLE)(ULONG_PTR)PhInitialSearchPid);
+            if (processNode)
+            {
+                SystemInformer_SelectTabPage(0); // 0 = Processes tab
+                SystemInformer_SelectProcessNode(processNode);
+                {
+                    PPH_PROCESS_ITEM processItem = PhGetSelectedProcessItem();
+
+                    if (processItem)
+                    {
+                        // No reference needed; no messages pumped.
+                        PhMwpShowProcessProperties(processItem);
+
+                    }
+                }
+            }
+
+            PhClearReference(&PhInitialSearchText);
+        }
+    }
+    break;
+
+
     case WM_DESTROY:
         {
             PhMwpOnDestroy(hWnd);

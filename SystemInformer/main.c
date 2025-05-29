@@ -9,7 +9,6 @@
  *     dmex    2017-2023
  *
  */
-
 #include <phapp.h>
 #include <colorbox.h>
 #include <hexedit.h>
@@ -31,6 +30,11 @@
 #include <srvprv.h>
 
 #include <trace.h>
+#include <shellapi.h>
+#include <tlhelp32.h>
+#include <procprpp.h>
+
+#define WM_PH_SEARCH_INITIAL (WM_APP + 900)
 
 BOOLEAN PhPluginsEnabled = FALSE;
 BOOLEAN PhPortableEnabled = FALSE;
@@ -42,6 +46,9 @@ PH_PROVIDER_THREAD PhTertiaryProviderThread;
 static PPH_LIST DialogList = NULL;
 static PPH_LIST FilterList = NULL;
 static PH_AUTO_POOL BaseAutoPool;
+BOOLEAN PhInitialSearchRequested = FALSE;
+DWORD PhInitialSearchPid = 0;
+PPH_STRING PhInitialSearchText = NULL;
 
 INT WINAPI wWinMain(
     _In_ HINSTANCE Instance,
@@ -173,6 +180,125 @@ INT WINAPI wWinMain(
     {
         PhShowKsiStatus();
     }
+    int argc = 0;
+    LPWSTR argv1 = NULL;
+
+    // Get the command line and skip the executable name
+    LPWSTR cmdLine = GetCommandLineW();
+    if (cmdLine)
+    {
+        // Skip leading whitespace
+        while (*cmdLine && iswspace(*cmdLine)) cmdLine++;
+
+        // Skip the program name (handle quotes)
+        if (*cmdLine == L'"')
+        {
+            cmdLine++;
+            while (*cmdLine && *cmdLine != L'"') cmdLine++;
+            if (*cmdLine == L'"') cmdLine++;
+        }
+        else
+        {
+            while (*cmdLine && !iswspace(*cmdLine)) cmdLine++;
+        }
+
+        // Skip whitespace after program name
+        while (*cmdLine && iswspace(*cmdLine)) cmdLine++;
+
+        // If there's anything left, it's the first argument
+        if (*cmdLine)
+        {
+            argv1 = cmdLine;
+            argc = 2; // program name + 1 argument
+
+            // Null-terminate the first argument if there are more
+            LPWSTR p = argv1;
+            while (*p && !iswspace(*p)) p++;
+            if (*p)
+            {
+                *p = 0;
+            }
+        }
+        else
+        {
+            argc = 1;
+        }
+    }
+
+
+    DWORD pid = 0;
+
+    if (argc != 2)
+    {
+        HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (hSnap != INVALID_HANDLE_VALUE)
+        {
+            PROCESSENTRY32W pe;
+            pe.dwSize = sizeof(pe);
+            if (Process32FirstW(hSnap, &pe))
+            {
+                do
+                {
+                    if (_wcsicmp(pe.szExeFile, L"notepad.exe") == 0)
+                    {
+                        pid = pe.th32ProcessID;
+                        break;
+                    }
+                } while (Process32NextW(hSnap, &pe));
+            }
+            CloseHandle(hSnap);
+        }
+
+        if (pid == 0)
+        {
+            fwprintf(stderr, L"No running notepad.exe found, starting notepad.exe...\n");
+            STARTUPINFOW si;
+            PROCESS_INFORMATION pi;
+            ZeroMemory(&si, sizeof(si));
+            ZeroMemory(&pi, sizeof(pi));
+            si.cb = sizeof(si);
+            if (CreateProcessW(
+                L"C:\\Windows\\System32\\notepad.exe",
+                NULL,
+                NULL,
+                NULL,
+                FALSE,
+                0,
+                NULL,
+                NULL,
+                &si,
+                &pi))
+            {
+                pid = pi.dwProcessId;
+                wprintf(L"Notepad started. PID: %lu\n", pid);
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
+                Sleep(500);
+            }
+            else
+            {
+                fwprintf(stderr, L"Failed to start notepad.exe. Error: %lu\n", GetLastError());
+                return 1;
+            }
+        }
+        else
+        {
+            wprintf(L"Found running notepad.exe. PID: %lu\n", pid);
+        }
+    }
+    else
+    {
+        pid = (DWORD)_wtoi(argv1);
+    }
+
+    wprintf(L"Searching environment variables for process ID: %lu\n", pid);
+
+    PhInitialSearchRequested = TRUE;
+    PhInitialSearchPid = pid;
+    PhInitialSearchText = PhCreateString(L"notepad");
+
+    // If you want to focus on the process based on PID instead of by name:
+    // PhInitialSearchText = PhFormatUInt64(pid, 10);
 
     if (!PhMainWndInitialization(CmdShow))
     {
@@ -180,9 +306,15 @@ INT WINAPI wWinMain(
         return 1;
     }
 
+    if (PhInitialSearchRequested)
+    {
+        PostMessage(PhMainWndHandle, WM_PH_SEARCH_INITIAL, 0, 0);
+    }
+
     PhEnableTerminationPolicy(TRUE);
 
     PhDrainAutoPool(&BaseAutoPool);
+
 
     result = PhMainMessageLoop();
 
@@ -1498,4 +1630,40 @@ VOID PhpEnablePrivileges(
 
         NtClose(tokenHandle);
     }
+}
+
+DWORD FindProcessPidByName(PCWSTR processName)
+{
+    PPH_PROCESS_ITEM *processItems;
+    ULONG numberOfProcessItems;
+    DWORD foundPid = 0;
+
+    PhEnumProcessItems(&processItems, &numberOfProcessItems);
+    for (ULONG i = 0; i < numberOfProcessItems; i++)
+    {
+        if (_wcsicmp(processItems[i]->ProcessName->Buffer, processName) == 0)
+        {
+            foundPid = (DWORD)(ULONG_PTR)processItems[i]->ProcessId;
+            break;
+        }
+    }
+    PhDereferenceObjects(processItems, numberOfProcessItems);
+    PhFree(processItems);
+    return foundPid;
+}
+
+VOID PhSetMainWindowSearchboxText(
+    _In_ PPH_STRING Text
+    )
+{
+    HWND searchboxHandle;
+
+    searchboxHandle = GetDlgItem(PhMainWndHandle, IDC_SEARCH);
+    if (!searchboxHandle)
+        return;
+
+    PhSetWindowText(searchboxHandle, PhGetString(Text));
+
+    // Trigger the search
+    SendMessage(searchboxHandle, WM_KEYDOWN, VK_RETURN, 0);
 }
