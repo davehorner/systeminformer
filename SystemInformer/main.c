@@ -49,7 +49,9 @@ static PH_AUTO_POOL BaseAutoPool;
 BOOLEAN PhInitialSearchRequested = FALSE;
 DWORD PhInitialSearchPid = 0;
 PPH_STRING PhInitialSearchText = NULL;
-
+BOOLEAN PhEnvSearchRequested = FALSE;
+PPH_STRING PhEnvVarName = NULL;
+PPH_STRING PhEnvVarValue = NULL;
 INT WINAPI wWinMain(
     _In_ HINSTANCE Instance,
     _In_opt_ HINSTANCE PrevInstance,
@@ -295,7 +297,7 @@ INT WINAPI wWinMain(
 
     PhInitialSearchRequested = TRUE;
     PhInitialSearchPid = pid;
-    PhInitialSearchText = PhCreateString(L"notepad");
+    //PhInitialSearchText = PhCreateString(L"notepad");
 
     // If you want to focus on the process based on PID instead of by name:
     // PhInitialSearchText = PhFormatUInt64(pid, 10);
@@ -306,8 +308,11 @@ INT WINAPI wWinMain(
         return 1;
     }
 
-    if (PhInitialSearchRequested)
+    if (PhInitialSearchRequested || PhEnvSearchRequested)
     {
+        PhEnvSearchRequested = TRUE;
+        PhEnvVarName = PhCreateString(L"RUST_BACKTRACE");
+        PhEnvVarValue = NULL; // PhCreateString(L"C:\\Windows\\Temp");
         PostMessage(PhMainWndHandle, WM_PH_SEARCH_INITIAL, 0, 0);
     }
 
@@ -1349,6 +1354,11 @@ typedef enum _PH_COMMAND_ARG
     PH_ARG_KPHSTARTUPHIGH,
     PH_ARG_KPHSTARTUPMAX,
     PH_ARG_CHANNEL,
+    PH_ARG_ENVSEARCH,
+    PH_ARG_ENVNAME,
+    PH_ARG_ENVVALUE,
+    PH_ARG_SEARCHPROC,        // Add this new argument for process name search
+    PH_ARG_PIDFORENV,         // Add this new argument for specifying PID for env search
 } PH_COMMAND_ARG;
 
 BOOLEAN NTAPI PhpCommandLineOptionCallback(
@@ -1471,6 +1481,29 @@ BOOLEAN NTAPI PhpCommandLineOptionCallback(
                     PhStartupParameters.UpdateChannel = PhDeveloperChannel;
             }
             break;
+        case PH_ARG_ENVSEARCH:
+            PhEnvSearchRequested = TRUE;
+            break;
+        case PH_ARG_ENVNAME:
+            PhSwapReference(&PhEnvVarName, Value);
+            break;
+        case PH_ARG_ENVVALUE:
+            PhSwapReference(&PhEnvVarValue, Value);
+            break;
+        case PH_ARG_SEARCHPROC:
+            PhInitialSearchRequested = TRUE;
+            PhSwapReference(&PhInitialSearchText, Value);
+            break;
+        case PH_ARG_PIDFORENV:
+            if (Value && PhStringToInteger64(&Value->sr, 0, &integer))
+            {
+                PhInitialSearchRequested = TRUE;
+                PhInitialSearchPid = (ULONG)integer;
+                // Create a PID string for search if no process name is provided
+                if (!PhInitialSearchText)
+                    PhInitialSearchText = PhFormatUInt64(integer, 10);
+            }
+            break;
         }
     }
     else
@@ -1526,6 +1559,11 @@ VOID PhpProcessStartupParameters(
         { PH_ARG_KPHSTARTUPHIGH, L"kh", NoArgumentType },
         { PH_ARG_KPHSTARTUPMAX, L"kx", NoArgumentType },
         { PH_ARG_CHANNEL, L"channel", MandatoryArgumentType },
+        { PH_ARG_ENVSEARCH, L"envsearch", NoArgumentType },
+        { PH_ARG_ENVNAME, L"envname", MandatoryArgumentType },
+        { PH_ARG_ENVVALUE, L"envvalue", OptionalArgumentType },
+        { PH_ARG_SEARCHPROC, L"searchproc", MandatoryArgumentType }, // Add this new argument for process name search
+        { PH_ARG_PIDFORENV, L"pidforenv", MandatoryArgumentType },   // Add this new argument for specifying PID for env search
     };
     PH_STRINGREF commandLine;
 
@@ -1546,6 +1584,11 @@ VOID PhpProcessStartupParameters(
             L"%s",
             L"-debug\n"
             L"-elevate\n"
+            L"-envsearch\n"
+            L"-envname name-of-variable\n"
+            L"-envvalue [optional-value]\n"
+            L"-searchproc process-name-to-search\n"
+            L"-pidforenv process-id-for-env-search\n"
             L"-help\n"
             L"-hide\n"
             L"-newinstance\n"

@@ -43,6 +43,10 @@
 extern BOOLEAN PhInitialSearchRequested;
 extern DWORD PhInitialSearchPid;
 extern PPH_STRING PhInitialSearchText;
+// Add these to external declarations at the top of mainwnd.c
+extern BOOLEAN PhEnvSearchRequested;
+extern PPH_STRING PhEnvVarName;
+extern PPH_STRING PhEnvVarValue;
 
 HWND PhMainWndHandle = NULL;
 BOOLEAN PhMainWndExiting = FALSE;
@@ -169,6 +173,17 @@ LRESULT CALLBACK PhMwpWndProc(
     {
         if (PhInitialSearchText)
         {
+            AllocConsole();
+            freopen("CONOUT$", "w", stdout);
+
+            wprintf(L"===== SEARCH VARIABLES DEBUG =====\n");
+            wprintf(L"PhInitialSearchPid: %lu\n", PhInitialSearchPid);
+            wprintf(L"PhInitialSearchText: %s\n", PhInitialSearchText ? PhInitialSearchText->Buffer : L"(null)");
+            wprintf(L"PhEnvSearchRequested: %s\n", PhEnvSearchRequested ? L"TRUE" : L"FALSE");
+            wprintf(L"PhEnvVarName: %s\n", PhEnvVarName ? PhEnvVarName->Buffer : L"(null)");
+            wprintf(L"PhEnvVarValue: %s\n", PhEnvVarValue ? PhEnvVarValue->Buffer : L"(null)");
+            wprintf(L"=================================\n\n");
+
             PhSetMainWindowSearchboxText(PhInitialSearchText);
 
             PPH_PROCESS_NODE processNode = PhFindProcessNode((HANDLE)(ULONG_PTR)PhInitialSearchPid);
@@ -183,7 +198,85 @@ LRESULT CALLBACK PhMwpWndProc(
                     {
                         // No reference needed; no messages pumped.
                         PhMwpShowProcessProperties(processItem);
+                        SystemInformer_SelectTabPage(PhMwpProcessesPage->Index);
+                        HANDLE hProcess = 0;
+                        NTSTATUS status = PhOpenProcess(
+                            &hProcess,
+                            PROCESS_ALL_ACCESS, //PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+                            (HANDLE)(ULONG_PTR)PhInitialSearchPid // Cast DWORD to HANDLE
+                        );
+                        if (!NT_SUCCESS(status) || !hProcess)
+                        {
+                            return 1;
+                        }
 
+                        // Use PH API to check WOW64 status
+                        BOOLEAN isWow64Process = FALSE;
+                        PhGetProcessIsWow64(hProcess, &isWow64Process);
+
+                        PVOID envBlock = 0;
+                        ULONG envLen = 0;
+                        status = PhGetProcessEnvironment(hProcess, isWow64Process, &envBlock, &envLen);
+                        if (!NT_SUCCESS(status))
+                        {
+                            return 1;
+                        }
+
+                        ULONG key = 0;
+                        PH_ENVIRONMENT_VARIABLE var;
+                        //while (PhEnumProcessEnvironmentVariables(envBlock, envLen, &key, &var) == STATUS_SUCCESS)
+                        //{
+                        //    wprintf(L"%.*s = %.*s\n",
+                        //        (int)(var.Name.Length / sizeof(WCHAR)), var.Name.Buffer,
+                        //        (int)(var.Value.Length / sizeof(WCHAR)), var.Value.Buffer);
+                        //}
+
+                        //status = PhGetProcessEnvironment(hProcess, isWow64Process, &envBlock, &envLen);
+                        //if (!NT_SUCCESS(status))
+                        //{
+                        //    return 1;
+                        //}
+                        // Then modify the environment variable enumeration code:
+                        while (PhEnumProcessEnvironmentVariables(envBlock, envLen, &key, &var) == STATUS_SUCCESS)
+                        {
+                            wprintf(L"%.*s = %.*s\n",
+                                (int)(var.Name.Length / sizeof(WCHAR)), var.Name.Buffer,
+                                (int)(var.Value.Length / sizeof(WCHAR)), var.Value.Buffer);
+
+                            // Check if we're looking for a specific environment variable
+                            if (PhEnvSearchRequested && PhEnvVarName)
+                            {
+                                // Create PH_STRINGREFs for comparison
+                                PH_STRINGREF nameRef;
+                                nameRef.Buffer = var.Name.Buffer;
+                                nameRef.Length = var.Name.Length;
+
+                                // Compare the variable name
+                                if (PhEqualStringRef(&nameRef, &PhEnvVarName->sr, TRUE))
+                                {
+                                    // If value isn't specified or matches the actual value
+                                    if (!PhEnvVarValue || PhCompareStringRef(&var.Value, &PhEnvVarValue->sr, TRUE) == 0)
+                                    {
+                                        // Format and show the message
+                                        PPH_STRING message = PhFormatString(
+                                            L"Found environment variable:\n%.*s = %.*s",
+                                            (int)(var.Name.Length / sizeof(WCHAR)), var.Name.Buffer,
+                                            (int)(var.Value.Length / sizeof(WCHAR)), var.Value.Buffer
+                                        );
+
+                                        MessageBox(PhMainWndHandle, message->Buffer, L"Environment Variable Found", MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
+                                        PhDereferenceObject(message);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Add cleanup for these variables at the end of the function
+                        PhClearReference(&PhEnvVarName);
+                        PhClearReference(&PhEnvVarValue);
+                        PhEnvSearchRequested = FALSE;
+
+                        CloseHandle(hProcess);
                     }
                 }
             }
@@ -4820,3 +4913,4 @@ PVOID PhPluginCreateTabPage(
 {
     return PhMwpCreatePage(Page);
 }
+
